@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>わにリバーシ</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:#103b22;color:#fff;font-family:sans-serif;touch-action:none}
+.screen{height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:12px}
+.hidden{display:none}
+button{padding:14px 24px;border:none;border-radius:12px;font-size:18px;background:#3ddc84;font-weight:bold}
+#top{display:flex;justify-content:space-between;width:min(95vw,520px);margin-bottom:8px}
+#board{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;width:min(92vw,520px);height:min(92vw,520px)}
+.cell{background:#1d8a49;display:flex;align-items:center;justify-content:center;font-size:clamp(18px,4vw,28px)}
+.valid{background:#39b96f}
+#msg,#dance{height:28px;margin-top:8px;text-align:center}
+#dance{font-size:22px;color:#ffd700;font-weight:bold}
+.rank{font-size:42px;color:gold}
+
+@keyframes dancePop{
+0%{transform:scale(0.5) rotate(-10deg)}
+25%{transform:scale(1.2) rotate(10deg)}
+50%{transform:scale(1) rotate(-10deg)}
+75%{transform:scale(1.2) rotate(10deg)}
+100%{transform:scale(1) rotate(0)}
+}
+.dancing{
+animation:dancePop .8s ease-in-out infinite;
+}
+</style>
+</head>
+<body>
+
+<div id="start" class="screen">
+<h1>🐊 わにリバーシ 🐊</h1>
+<p>
+60秒で勝負！<br>
+超難しいAIに挑戦！<br>
+自分のターンが3回来るたびに<br>
+わに応援ダンス発動！
+</p>
+<button onclick="startGame()">スタート</button>
+</div>
+
+<div id="game" class="screen hidden">
+<div id="top">
+<div>スコア:<span id="score">2</span></div>
+<div>残り:<span id="time">60</span>秒</div>
+</div>
+
+<div id="board"></div>
+
+<div id="msg"></div>
+<div id="dance"></div>
+</div>
+
+<div id="result" class="screen hidden">
+<h1>結果発表</h1>
+<div>最終スコア:<span id="finalScore"></span></div>
+<div id="rank" class="rank"></div>
+<br>
+<button onclick="startGame()">もう一度遊ぶ</button>
+</div>
+
+<script>
+const E=0,P=1,A=2;
+
+let board;
+let time=60;
+let timer;
+let end=false;
+let playerTurns=0;
+
+function show(id){
+["start","game","result"].forEach(v=>{
+document.getElementById(v).classList.add("hidden");
+});
+document.getElementById(id).classList.remove("hidden");
+}
+
+function startGame(){
+board=Array.from({length:8},()=>Array(8).fill(0));
+
+board[3][3]=A;
+board[4][4]=A;
+board[3][4]=P;
+board[4][3]=P;
+
+time=60;
+end=false;
+playerTurns=0;
+
+dance.textContent="";
+dance.classList.remove("dancing");
+
+show("game");
+
+clearInterval(timer);
+
+timer=setInterval(()=>{
+time--;
+timeEl.textContent=time;
+
+if(time<=0){
+finish();
+}
+},1000);
+
+render();
+}
+
+const boardEl=document.getElementById("board");
+const scoreEl=document.getElementById("score");
+const timeEl=document.getElementById("time");
+const msg=document.getElementById("msg");
+const dance=document.getElementById("dance");
+
+function inb(r,c){
+return r>=0&&r<8&&c>=0&&c<8;
+}
+
+function flips(b,r,c,p){
+if(b[r][c]) return [];
+
+let o=p===P?A:P;
+let res=[];
+
+for(let dr=-1;dr<=1;dr++){
+for(let dc=-1;dc<=1;dc++){
+
+if(!dr&&!dc) continue;
+
+let rr=r+dr;
+let cc=c+dc;
+let tmp=[];
+
+while(inb(rr,cc)&&b[rr][cc]===o){
+tmp.push([rr,cc]);
+rr+=dr;
+cc+=dc;
+}
+
+if(tmp.length&&inb(rr,cc)&&b[rr][cc]===p){
+res.push(...tmp);
+}
+}
+}
+
+return res;
+}
+
+function moves(b,p){
+let m=[];
+
+for(let r=0;r<8;r++){
+for(let c=0;c<8;c++){
+if(flips(b,r,c,p).length){
+m.push([r,c]);
+}
+}
+}
+
+return m;
+}
+
+function put(b,r,c,p){
+let f=flips(b,r,c,p);
+
+if(!f.length) return null;
+
+let n=b.map(v=>v.slice());
+
+n[r][c]=p;
+
+f.forEach(v=>{
+n[v[0]][v[1]]=p;
+});
+
+return n;
+}
+
+function render(){
+
+boardEl.innerHTML="";
+
+let pm=moves(board,P);
+
+for(let r=0;r<8;r++){
+for(let c=0;c<8;c++){
+
+let d=document.createElement("div");
+
+d.className="cell";
+
+if(pm.some(v=>v[0]===r&&v[1]===c)){
+d.classList.add("valid");
+}
+
+d.textContent=
+board[r][c]===P ? "🐊" :
+board[r][c]===A ? "🦖" : "";
+
+d.onclick=()=>player(r,c);
+
+boardEl.appendChild(d);
+}
+}
+
+scoreEl.textContent=count(P);
+}
+
+function player(r,c){
+
+if(end) return;
+
+let nb=put(board,r,c,P);
+
+if(!nb) return;
+
+playerTurns++;
+
+if(playerTurns % 3 === 0){
+
+dance.textContent="🐊♪ わに応援ダンス発動！ ♪🐊";
+dance.classList.add("dancing");
+
+setTimeout(()=>{
+dance.textContent="";
+dance.classList.remove("dancing");
+},2000);
+
+}
+
+board=nb;
+
+render();
+
+setTimeout(ai,180);
+
+if(done()){
+finish();
+}
+}
+
+function ai(){
+
+let ms=moves(board,A);
+
+if(!ms.length){
+return;
+}
+
+let best=ms[0];
+let bestVal=-99999;
+
+for(let m of ms){
+
+let n=put(board,m[0],m[1],A);
+
+let v=evaluate(n);
+
+if(v>bestVal){
+bestVal=v;
+best=m;
+}
+}
+
+board=put(board,best[0],best[1],A);
+
+render();
+
+if(done()){
+finish();
+}
+}
+
+function evaluate(b){
+
+const w=[
+[120,-20,20,5,5,20,-20,120],
+[-20,-40,-5,-5,-5,-5,-40,-20],
+[20,-5,15,3,3,15,-5,20],
+[5,-5,3,3,3,3,-5,5],
+[5,-5,3,3,3,3,-5,5],
+[20,-5,15,3,3,15,-5,20],
+[-20,-40,-5,-5,-5,-5,-40,-20],
+[120,-20,20,5,5,20,-20,120]
+];
+
+let s=0;
+
+for(let r=0;r<8;r++){
+for(let c=0;c<8;c++){
+
+if(b[r][c]===A) s+=w[r][c];
+if(b[r][c]===P) s-=w[r][c];
+
+}
+}
+
+return s;
+}
+
+function count(p){
+
+let n=0;
+
+for(let r=0;r<8;r++){
+for(let c=0;c<8;c++){
+
+if(board[r][c]===p){
+n++;
+}
+
+}
+}
+
+return n;
+}
+
+function done(){
+return !moves(board,P).length && !moves(board,A).length;
+}
+
+function finish(){
+
+end=true;
+
+clearInterval(timer);
+
+let s=count(P);
+
+document.getElementById("finalScore").textContent=s;
+
+document.getElementById("rank").textContent=
+s>=50 ? "Sランク" :
+s>=40 ? "Aランク" :
+s>=30 ? "Bランク" :
+"Cランク";
+
+show("result");
+}
+</script>
+
+</body>
+</html>
